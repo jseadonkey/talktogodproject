@@ -17,6 +17,22 @@ app.post('/voice', async (req, res) => {
   const userSpeech = req.body.SpeechResult || req.body.Body || '';
   const twiml = new VoiceResponse();
 
+  // If no speech was detected, prompt the guest again
+  if (!userSpeech) {
+    const gather = twiml.gather({
+      input: 'speech',
+      action: '/voice',
+      method: 'POST',
+      timeout: 5
+    });
+
+    gather.say({ voice: 'Polly.Joanna', language: 'en-US' }, "I didn’t quite hear you... Want to try again? Go ahead, I’m listening...");
+    
+    res.type('text/xml');
+    return res.send(twiml.toString());
+  }
+
+  // Initialize session if new call
   if (!sessions[callSid]) {
     sessions[callSid] = [
       {
@@ -53,7 +69,7 @@ Keep your responses under 50 words.`
     // Add pacing with natural ellipses
     reply = reply.replace(/([.,!?])\s*/g, '$1... ');
 
-    // Log interaction to Render logs
+    // Log interaction to console
     console.log(`\n=== NEW INTERACTION ===`);
     console.log(`[${new Date().toISOString()}] CallSid: ${callSid}`);
     console.log(`GUEST: ${userSpeech}`);
@@ -66,13 +82,10 @@ Keep your responses under 50 words.`
       input: 'speech',
       action: '/voice',
       method: 'POST',
-      timeout: 2
+      timeout: 5
     });
 
     gather.say({ voice: 'Polly.Joanna', language: 'en-US' }, reply);
-
-    // Fallback if no speech detected
-    twiml.say({ voice: 'Polly.Joanna', language: 'en-US' }, "Are you still there...? I'm listening...");
   } catch (error) {
     console.error('Error from OpenAI or Twilio:', error);
     twiml.say("Oh dear... a celestial hiccup occurred. Try again in a moment.");
@@ -92,4 +105,3 @@ app.post('/call-end', (req, res) => {
 app.listen(port, () => {
   console.log(`Voice assistant running on port ${port}`);
 });
-
