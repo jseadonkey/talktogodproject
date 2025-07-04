@@ -30,7 +30,7 @@ app.post('/voice', async (req, res) => {
 
   try {
     const chatResponse = await openai.chat.completions.create({
-      model: 'gpt-4',
+      model: 'gpt-4-turbo',
       messages: sessions[callSid]
     });
 
