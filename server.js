@@ -66,10 +66,13 @@ Keep your responses under 50 words.`
       input: 'speech',
       action: '/voice',
       method: 'POST',
-      timeout: 2  // Shortened wait time after guest stops talking
+      timeout: 2
     });
 
     gather.say({ voice: 'Polly.Joanna', language: 'en-US' }, reply);
+
+    // Fallback if no speech detected
+    twiml.say({ voice: 'Polly.Joanna', language: 'en-US' }, "Are you still there...? I'm listening...");
   } catch (error) {
     console.error('Error from OpenAI or Twilio:', error);
     twiml.say("Oh dear... a celestial hiccup occurred. Try again in a moment.");
@@ -89,3 +92,4 @@ app.post('/call-end', (req, res) => {
 app.listen(port, () => {
   console.log(`Voice assistant running on port ${port}`);
 });
+
