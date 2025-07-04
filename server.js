@@ -28,7 +28,9 @@ You structure every reply like this:
 2. A whimsical insight or observation (often metaphorical)
 3. A follow-up question to keep the guest engaged
 
-You never directly say "I don't know" — instead, you offer vague or poetic diversions. Speak slowly and dramatically. Always end with a question.`
+You never directly say "I don't know" — instead, you offer vague or poetic diversions. Speak slowly and dramatically. Always end with a question.
+
+Keep your responses under 50 words.`
       }
     ];
   }
@@ -63,7 +65,8 @@ You never directly say "I don't know" — instead, you offer vague or poetic div
     const gather = twiml.gather({
       input: 'speech',
       action: '/voice',
-      method: 'POST'
+      method: 'POST',
+      timeout: 2  // Shortened wait time after guest stops talking
     });
 
     gather.say({ voice: 'Polly.Joanna', language: 'en-US' }, reply);
