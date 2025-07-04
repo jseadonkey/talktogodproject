@@ -12,14 +12,6 @@ app.use(bodyParser.urlencoded({ extended: false }));
 
 const sessions = {};
 
-// Utility: escape characters for SSML
-function sanitizeSSML(text) {
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
-}
-
 app.post('/voice', async (req, res) => {
   const callSid = req.body.CallSid;
   const userSpeech = req.body.SpeechResult || req.body.Body || '';
@@ -56,16 +48,15 @@ You never directly say "I don't know" — instead, you offer vague or poetic div
 
     let reply = chatResponse.choices[0].message.content;
 
+    // Add pacing with natural ellipses
+    reply = reply.replace(/([.,!?])\s*/g, '$1... ');
+
     // Log interaction to Render logs
     console.log(`\n=== NEW INTERACTION ===`);
     console.log(`[${new Date().toISOString()}] CallSid: ${callSid}`);
     console.log(`GUEST: ${userSpeech}`);
     console.log(`GOD  : ${reply}`);
     console.log(`========================\n`);
-
-    // Add pauses and sanitize for SSML
-    reply = reply.replace(/([.,!?])\s*/g, '$1 <break time="0.5s"/> ');
-    const safeReply = sanitizeSSML(reply);
 
     sessions[callSid].push({ role: 'assistant', content: reply });
 
@@ -74,10 +65,8 @@ You never directly say "I don't know" — instead, you offer vague or poetic div
       action: '/voice',
       method: 'POST'
     });
-    gather.say(
-      { voice: 'Polly.Joanna', language: 'en-US' },
-      `<speak>${safeReply}</speak>`
-    );
+
+    gather.say({ voice: 'Polly.Joanna', language: 'en-US' }, reply);
   } catch (error) {
     console.error('Error from OpenAI or Twilio:', error);
     twiml.say("Oh dear... a celestial hiccup occurred. Try again in a moment.");
