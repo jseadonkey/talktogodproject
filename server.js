@@ -21,7 +21,6 @@ app.post('/voice', async (req, res) => {
   console.log(req.body);
   console.log('========================\n');
 
-  // Handle new caller (no session + no speech yet)
   const isNewCall = !sessions[callSid] && !userSpeech;
 
   if (isNewCall) {
@@ -60,7 +59,7 @@ Keep your responses under 50 words.`
       });
 
       let reply = chatResponse.choices[0].message.content;
-      reply = reply.replace(/([.,!?])\s*/g, '$1... '); // Add dramatic pacing
+      reply = reply.replace(/([.,!?])\s*/g, '$1... '); // dramatic pacing
 
       console.log(`\n=== FIRST GREETING ===`);
       console.log(`GOD: ${reply}`);
@@ -68,14 +67,16 @@ Keep your responses under 50 words.`
 
       sessions[callSid].push({ role: 'assistant', content: reply });
 
-      const gather = twiml.gather({
+      // Speak greeting FIRST (outside gather)
+      twiml.say({ voice: 'Polly.Joanna', language: 'en-US' }, reply);
+
+      // Then start gather block AFTER speaking
+      twiml.gather({
         input: 'speech',
         action: '/voice',
         method: 'POST',
         timeout: 7
       });
-
-      gather.say({ voice: 'Polly.Joanna', language: 'en-US' }, reply);
 
       res.type('text/xml');
       return res.send(twiml.toString());
@@ -87,7 +88,7 @@ Keep your responses under 50 words.`
     }
   }
 
-  // If no speech in ongoing convo, reprompt
+  // If no speech detected mid-convo
   if (!userSpeech) {
     const gather = twiml.gather({
       input: 'speech',
@@ -101,7 +102,7 @@ Keep your responses under 50 words.`
     return res.send(twiml.toString());
   }
 
-  // Maintain conversation
+  // Handle continuing conversation
   sessions[callSid].push({ role: 'user', content: userSpeech });
 
   try {
@@ -111,7 +112,7 @@ Keep your responses under 50 words.`
     });
 
     let reply = chatResponse.choices[0].message.content;
-    reply = reply.replace(/([.,!?])\s*/g, '$1... ');
+    reply = reply.replace(/([.,!?])\s*/g, '$1... '); // dramatic pacing
 
     console.log(`\n=== RESPONSE ===`);
     console.log(`GUEST: ${userSpeech}`);
