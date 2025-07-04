@@ -75,7 +75,7 @@ Keep your responses under 50 words.`
         input: 'speech',
         action: '/voice',
         method: 'POST',
-        timeout: 7
+        timeout: 3
       });
 
       res.type('text/xml');
@@ -94,7 +94,7 @@ Keep your responses under 50 words.`
       input: 'speech',
       action: '/voice',
       method: 'POST',
-      timeout: 7
+      timeout: 3
     });
 
     gather.say({ voice: 'Polly.Joanna', language: 'en-US' }, "I didn’t quite hear you... Want to try again? Go ahead, I’m listening...");
@@ -125,7 +125,7 @@ Keep your responses under 50 words.`
       input: 'speech',
       action: '/voice',
       method: 'POST',
-      timeout: 7
+      timeout: 3
     });
 
     gather.say({ voice: 'Polly.Joanna', language: 'en-US' }, reply);
