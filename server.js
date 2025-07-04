@@ -56,7 +56,14 @@ You never directly say "I don't know" — instead, you offer vague or poetic div
 
     let reply = chatResponse.choices[0].message.content;
 
-    // Add SSML-style pauses after punctuation
+    // Log interaction to Render logs
+    console.log(`\n=== NEW INTERACTION ===`);
+    console.log(`[${new Date().toISOString()}] CallSid: ${callSid}`);
+    console.log(`GUEST: ${userSpeech}`);
+    console.log(`GOD  : ${reply}`);
+    console.log(`========================\n`);
+
+    // Add pauses and sanitize for SSML
     reply = reply.replace(/([.,!?])\s*/g, '$1 <break time="0.5s"/> ');
     const safeReply = sanitizeSSML(reply);
 
@@ -83,6 +90,7 @@ You never directly say "I don't know" — instead, you offer vague or poetic div
 app.post('/call-end', (req, res) => {
   const callSid = req.body.CallSid;
   delete sessions[callSid];
+  console.log(`[${new Date().toISOString()}] Call ${callSid} ended.`);
   res.sendStatus(200);
 });
 
