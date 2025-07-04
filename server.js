@@ -12,17 +12,24 @@ app.use(bodyParser.urlencoded({ extended: false }));
 
 const sessions = {};
 
+// Utility: escape characters for SSML
+function sanitizeSSML(text) {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
 app.post('/voice', async (req, res) => {
   const callSid = req.body.CallSid;
   const userSpeech = req.body.SpeechResult || req.body.Body || '';
   const twiml = new VoiceResponse();
 
-  // Initialize conversation
   if (!sessions[callSid]) {
     sessions[callSid] = [
       {
         role: 'system',
-        content: `You are a whimsical, female character called God. You provide guests with humorous, esoteric, and meandering answers, often referencing the meaning or purpose of life. 
+        content: `You are a whimsical, female character called God. You provide guests with humorous, esoteric, and meandering answers, often referencing the meaning or purpose of life.
 
 You structure every reply like this:
 1. A short, friendly mystical greeting
@@ -34,7 +41,7 @@ You never directly say "I don't know" — instead, you offer vague or poetic div
     ];
   }
 
-  // Trim session length
+  // Trim session memory
   if (sessions[callSid].length > 20) {
     sessions[callSid] = sessions[callSid].slice(-20);
   }
@@ -49,8 +56,9 @@ You never directly say "I don't know" — instead, you offer vague or poetic div
 
     let reply = chatResponse.choices[0].message.content;
 
-    // Simple SSML pause injection (replace commas/periods with slight breaks)
-    reply = reply.replace(/([\.,!?])\s*/g, '$1 <break time="0.5s"/> ');
+    // Add SSML-style pauses after punctuation
+    reply = reply.replace(/([.,!?])\s*/g, '$1 <break time="0.5s"/> ');
+    const safeReply = sanitizeSSML(reply);
 
     sessions[callSid].push({ role: 'assistant', content: reply });
 
@@ -59,10 +67,13 @@ You never directly say "I don't know" — instead, you offer vague or poetic div
       action: '/voice',
       method: 'POST'
     });
-    gather.say({ voice: 'Polly.Joanna', language: 'en-US' }, `<speak>${reply}</speak>`, { loop: 1 });
+    gather.say(
+      { voice: 'Polly.Joanna', language: 'en-US' },
+      `<speak>${safeReply}</speak>`
+    );
   } catch (error) {
     console.error('Error from OpenAI or Twilio:', error);
-    twiml.say("I'm sorry, something went wrong. Please try again later.");
+    twiml.say("Oh dear... a celestial hiccup occurred. Try again in a moment.");
   }
 
   res.type('text/xml');
