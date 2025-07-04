@@ -17,7 +17,7 @@ app.post('/voice', async (req, res) => {
   const userSpeech = req.body.SpeechResult || req.body.Body || '';
   const twiml = new VoiceResponse();
 
-  // If no speech was detected, prompt the guest again
+  // If no speech was detected, prompt again
   if (!userSpeech) {
     const gather = twiml.gather({
       input: 'speech',
@@ -27,12 +27,11 @@ app.post('/voice', async (req, res) => {
     });
 
     gather.say({ voice: 'Polly.Joanna', language: 'en-US' }, "I didn’t quite hear you... Want to try again? Go ahead, I’m listening...");
-
     res.type('text/xml');
     return res.send(twiml.toString());
   }
 
-  // New session setup
+  // New session
   if (!sessions[callSid]) {
     const openingVariants = [
       "Ah... another soul drawn to The Fainting Couch Hotel... what secrets shall we uncover today?",
@@ -41,6 +40,7 @@ app.post('/voice', async (req, res) => {
       "The spirits stirred when you checked in... and now they lean in to listen...",
       "From deep within the woods of Cobb, a whisper becomes a question... welcome, seeker from The Fainting Couch Hotel..."
     ];
+
     const intro = openingVariants[Math.floor(Math.random() * openingVariants.length)];
 
     sessions[callSid] = [
@@ -62,7 +62,7 @@ Keep your responses under 50 words.`
     ];
   }
 
-  // Trim session memory
+  // Keep chat history short
   if (sessions[callSid].length > 20) {
     sessions[callSid] = sessions[callSid].slice(-20);
   }
@@ -70,4 +70,47 @@ Keep your responses under 50 words.`
   sessions[callSid].push({ role: 'user', content: userSpeech });
 
   try {
-    const chatResponse = await openai.chat
+    const chatResponse = await openai.chat.completions.create({
+      model: 'gpt-3.5-turbo',
+      messages: sessions[callSid]
+    });
+
+    let reply = chatResponse.choices[0].message.content;
+    reply = reply.replace(/([.,!?])\s*/g, '$1... '); // Add dramatic pacing
+
+    // Log interaction
+    console.log(`\n=== NEW INTERACTION ===`);
+    console.log(`[${new Date().toISOString()}] CallSid: ${callSid}`);
+    console.log(`GUEST: ${userSpeech}`);
+    console.log(`GOD  : ${reply}`);
+    console.log(`========================\n`);
+
+    sessions[callSid].push({ role: 'assistant', content: reply });
+
+    const gather = twiml.gather({
+      input: 'speech',
+      action: '/voice',
+      method: 'POST',
+      timeout: 5
+    });
+
+    gather.say({ voice: 'Polly.Joanna', language: 'en-US' }, reply);
+  } catch (error) {
+    console.error('Error from OpenAI or Twilio:', error);
+    twiml.say("Oh dear... a celestial hiccup occurred. Try again in a moment.");
+  }
+
+  res.type('text/xml');
+  res.send(twiml.toString());
+});
+
+app.post('/call-end', (req, res) => {
+  const callSid = req.body.CallSid;
+  delete sessions[callSid];
+  console.log(`[${new Date().toISOString()}] Call ${callSid} ended.`);
+  res.sendStatus(200);
+});
+
+app.listen(port, () => {
+  console.log(`Voice assistant running on port ${port}`);
+});
