@@ -37,8 +37,12 @@ app.post('/voice', async (req, res) => {
     const reply = chatResponse.choices[0].message.content;
     sessions[callSid].push({ role: 'assistant', content: reply });
 
-    twiml.say({ voice: 'Polly.Joanna' }, reply);
-    twiml.redirect('/voice');
+const gather = twiml.gather({
+  input: 'speech',
+  action: '/voice',
+  method: 'POST'
+});
+gather.say({ voice: 'Polly.Joanna' }, reply);
   } catch (error) {
     console.error('Error from OpenAI or Twilio:', error);
     twiml.say("I'm sorry, something went wrong. Please try again later.");
