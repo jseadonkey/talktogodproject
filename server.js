@@ -55,7 +55,7 @@ Avoid using lists or numbering in your responses.`
       });
 
       let reply = chatResponse.choices[0].message.content;
-      reply = reply.replace(/([.,!?])\s*/g, '$1... '); // adds natural pauses
+      reply = reply.replace(/([.,!?])\s*/g, '$1... ');
 
       console.log(`\n=== FIRST GREETING ===`);
       console.log(`GOD: ${reply}`);
@@ -68,10 +68,11 @@ Avoid using lists or numbering in your responses.`
         action: '/voice',
         method: 'POST',
         timeout: 3,
-        speechTimeout: '1'
+        speechTimeout: 'auto'
       });
 
       gather.say({ voice: 'Polly.Joanna', language: 'en-US' }, reply);
+      twiml.redirect('/voice');
 
       res.type('text/xml');
       return res.send(twiml.toString());
@@ -89,10 +90,12 @@ Avoid using lists or numbering in your responses.`
       action: '/voice',
       method: 'POST',
       timeout: 3,
-      speechTimeout: '1'
+      speechTimeout: 'auto'
     });
 
     gather.say({ voice: 'Polly.Joanna', language: 'en-US' }, "I didn’t quite hear you... Want to try again? Go ahead, I’m listening...");
+    twiml.redirect('/voice');
+
     res.type('text/xml');
     return res.send(twiml.toString());
   }
@@ -124,6 +127,7 @@ Avoid using lists or numbering in your responses.`
     });
 
     gather.say({ voice: 'Polly.Joanna', language: 'en-US' }, reply);
+    twiml.redirect('/voice');
   } catch (error) {
     console.error('Error during GPT reply:', error);
     twiml.say("Oh dear... a celestial hiccup occurred. Try again in a moment.");
