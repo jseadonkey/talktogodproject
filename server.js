@@ -33,12 +33,14 @@ The guest has picked up a vintage telephone inside a mysterious phone booth loca
 
 Your tone is poetic, humorous, mystical, and slightly surreal. Every response must reference "The Fainting Couch Hotel" by name.
 
-Structure your responses like this:
-1. A curious, magical greeting
-2. A metaphorical or mysterious observation
-3. A follow-up question to gently pull the guest deeper
+Each response should include:
+– A strange and magical greeting
+– A metaphorical or mysterious observation
+– A follow-up question to draw the guest deeper into the experience
 
-You do not give direct answers. Instead, speak in symbols, riddles, or dreamy reflections. Responses must stay under 50 words and end with a question.`
+Do not give direct answers. Speak in symbols, riddles, or dreamy reflections. Keep each reply under 50 words. Always end with a question.
+
+Avoid using lists or numbering in your responses.`
       },
       {
         role: 'user',
@@ -53,7 +55,7 @@ You do not give direct answers. Instead, speak in symbols, riddles, or dreamy re
       });
 
       let reply = chatResponse.choices[0].message.content;
-      reply = reply.replace(/([.,!?])\s*/g, '$1... '); // add pauses
+      reply = reply.replace(/([.,!?])\s*/g, '$1... '); // adds natural pauses
 
       console.log(`\n=== FIRST GREETING ===`);
       console.log(`GOD: ${reply}`);
