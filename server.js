@@ -67,7 +67,8 @@ Avoid using lists or numbering in your responses.`
         input: 'speech',
         action: '/voice',
         method: 'POST',
-        timeout: 3
+        timeout: 3,
+        speechTimeout: '1'
       });
 
       gather.say({ voice: 'Polly.Joanna', language: 'en-US' }, reply);
@@ -87,7 +88,8 @@ Avoid using lists or numbering in your responses.`
       input: 'speech',
       action: '/voice',
       method: 'POST',
-      timeout: 3
+      timeout: 3,
+      speechTimeout: '1'
     });
 
     gather.say({ voice: 'Polly.Joanna', language: 'en-US' }, "I didn’t quite hear you... Want to try again? Go ahead, I’m listening...");
@@ -117,7 +119,8 @@ Avoid using lists or numbering in your responses.`
       input: 'speech',
       action: '/voice',
       method: 'POST',
-      timeout: 3
+      timeout: 3,
+      speechTimeout: '1'
     });
 
     gather.say({ voice: 'Polly.Joanna', language: 'en-US' }, reply);
