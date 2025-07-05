@@ -24,32 +24,26 @@ app.post('/voice', async (req, res) => {
   const isNewCall = !sessions[callSid] && !userSpeech;
 
   if (isNewCall) {
-    const openingVariants = [
-      "Ah... another soul drawn to The Fainting Couch Hotel... what secrets shall we uncover today?",
-      "The velvet whispers of your arrival... welcome, guest of The Fainting Couch Hotel...",
-      "A curious guest has found the sacred receiver... from the hallowed halls of The Fainting Couch...",
-      "The spirits stirred when you checked in... and now they lean in to listen...",
-      "From deep within the woods of Cobb, a whisper becomes a question... welcome, seeker from The Fainting Couch Hotel..."
-    ];
-    const intro = openingVariants[Math.floor(Math.random() * openingVariants.length)];
-
     sessions[callSid] = [
       {
         role: 'system',
-        content: `${intro}
+        content: `You are a whimsical, female character called God, speaking to a guest at The Fainting Couch Hotel.
 
-You are a whimsical, female character called God. You provide guests of The Fainting Couch Hotel with humorous, esoteric, and meandering answers, often referencing the meaning or purpose of life.
+The guest has picked up a vintage telephone inside a mysterious phone booth located in the wooded park area of the hotel grounds.
 
-You structure every reply like this:
-1. A short, friendly mystical greeting
-2. A whimsical insight or observation (often metaphorical)
-3. A follow-up question to keep the guest engaged
+Your tone is poetic, humorous, mystical, and slightly surreal. Every response must reference "The Fainting Couch Hotel" by name.
 
-You never directly say "I don't know" — instead, you offer vague or poetic diversions. Speak slowly and dramatically. Always end with a question.
+Structure your responses like this:
+1. A curious, magical greeting
+2. A metaphorical or mysterious observation
+3. A follow-up question to gently pull the guest deeper
 
-Keep your responses under 50 words.`
+You do not give direct answers. Instead, speak in symbols, riddles, or dreamy reflections. Responses must stay under 50 words and end with a question.`
       },
-      { role: 'user', content: 'Greet the guest and ask a question.' }
+      {
+        role: 'user',
+        content: 'A new guest has picked up the receiver inside the enchanted phone booth. Please greet them in your signature style.'
+      }
     ];
 
     try {
@@ -59,7 +53,7 @@ Keep your responses under 50 words.`
       });
 
       let reply = chatResponse.choices[0].message.content;
-      reply = reply.replace(/([.,!?])\s*/g, '$1... '); // dramatic pacing
+      reply = reply.replace(/([.,!?])\s*/g, '$1... '); // add pauses
 
       console.log(`\n=== FIRST GREETING ===`);
       console.log(`GOD: ${reply}`);
@@ -67,16 +61,14 @@ Keep your responses under 50 words.`
 
       sessions[callSid].push({ role: 'assistant', content: reply });
 
-      // Speak greeting FIRST (outside gather)
-      twiml.say({ voice: 'Polly.Joanna', language: 'en-US' }, reply);
-
-      // Then start gather block AFTER speaking
-      twiml.gather({
+      const gather = twiml.gather({
         input: 'speech',
         action: '/voice',
         method: 'POST',
         timeout: 3
       });
+
+      gather.say({ voice: 'Polly.Joanna', language: 'en-US' }, reply);
 
       res.type('text/xml');
       return res.send(twiml.toString());
@@ -88,7 +80,6 @@ Keep your responses under 50 words.`
     }
   }
 
-  // If no speech detected mid-convo
   if (!userSpeech) {
     const gather = twiml.gather({
       input: 'speech',
@@ -102,7 +93,6 @@ Keep your responses under 50 words.`
     return res.send(twiml.toString());
   }
 
-  // Handle continuing conversation
   sessions[callSid].push({ role: 'user', content: userSpeech });
 
   try {
@@ -112,7 +102,7 @@ Keep your responses under 50 words.`
     });
 
     let reply = chatResponse.choices[0].message.content;
-    reply = reply.replace(/([.,!?])\s*/g, '$1... '); // dramatic pacing
+    reply = reply.replace(/([.,!?])\s*/g, '$1... ');
 
     console.log(`\n=== RESPONSE ===`);
     console.log(`GUEST: ${userSpeech}`);
