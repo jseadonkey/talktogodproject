@@ -21,7 +21,9 @@ app.post('/voice', async (req, res) => {
   console.log(req.body);
   console.log('========================\n');
 
-  const isNewCall = !sessions[callSid] && !userSpeech;
+  console.log('SpeechResult:', userSpeech);
+
+  const isNewCall = !sessions[callSid];
 
   if (isNewCall) {
     sessions[callSid] = [
@@ -86,7 +88,7 @@ Avoid using lists or numbering in your responses.`
     }
   }
 
-  if (!userSpeech) {
+  if (!userSpeech.trim()) {
     const gather = twiml.gather({
       input: 'speech',
       action: '/voice',
