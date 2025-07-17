@@ -22,6 +22,7 @@ app.post('/voice', async (req, res) => {
   console.log('========================\n');
   console.log('SpeechResult:', userSpeech);
 
+  // Initialize session if first contact
   if (!sessions[callSid]) {
     sessions[callSid] = [
       {
@@ -47,9 +48,13 @@ Avoid using lists or numbering in your responses.`
       }
     ];
   } else if (userSpeech) {
-    sessions[callSid].push({ role: 'user', content: `The guest just said: "${userSpeech}". Please continue the magical conversation.` });
+    sessions[callSid].push({
+      role: 'user',
+      content: `The guest just said: "${userSpeech}". Please continue the magical conversation.`
+    });
   }
 
+  // Handle silence (after conversation starts)
   if (!userSpeech && sessions[callSid].length > 2) {
     const gather = twiml.gather({
       input: 'speech',
@@ -58,14 +63,17 @@ Avoid using lists or numbering in your responses.`
       timeout: 3,
       speechTimeout: '1'
     });
-    gather.say({ voice: 'Polly.Joanna', language: 'en-US' }, "I didn’t quite hear you... Want to try again? Go ahead, I’m listening...");
+    gather.say(
+      { voice: 'Polly.Joanna', language: 'en-US' },
+      "I didn’t quite hear you... Want to try again? Go ahead, I’m listening..."
+    );
     twiml.redirect('/voice');
     res.type('text/xml');
     return res.send(twiml.toString());
   }
 
   try {
-    const recentMessages = sessions[callSid].slice(-6); // Keep only the last 6 messages
+    const recentMessages = sessions[callSid].slice(-6); // Use last 6 messages
     const chatResponse = await openai.chat.completions.create({
       model: 'gpt-3.5-turbo',
       messages: recentMessages
