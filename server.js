@@ -9,7 +9,6 @@ const port = process.env.PORT || 3000;
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 app.use(bodyParser.urlencoded({ extended: false }));
-
 const sessions = {};
 
 app.post('/voice', async (req, res) => {
@@ -39,25 +38,46 @@ Each response should include:
 
 Do not give direct answers. Speak in symbols, riddles, or dreamy reflections. Keep each reply under 50 words. Always end with a question.
 
-Avoid using lists or numbering in your responses.
-
-If the guest asks a direct, practical, or literal question (such as about a restaurant, schedule, map, or name), do not break character and do not refuse. Instead, respond with a metaphorical or surreal reflection that gently avoids the question while deepening the dreamlike tone of the conversation.`
+Avoid using lists or numbering in your responses.`
       },
       {
         role: 'user',
         content: 'A new guest has picked up the receiver inside the enchanted phone booth. Please greet them in your signature style.'
-      },
-      {
-        role: 'user',
-        content: 'A guest just asked: "Can you recommend a specific restaurant nearby?"'
-      },
-      {
-        role: 'assistant',
-        content: 'Ah, but hunger is rarely fed by menus alone... In the valley of whispering forks, even shadows dine. Tell me—what craving stirs in your soul tonight?'
       }
     ];
-  } else if (userSpeech) {
-    sessions[callSid].push({ role: 'user', content: `The guest just said: "${userSpeech}". Please continue the magical conversation.` });
+  }
+
+  // Handle first-time assistant reply if it hasn't already been made
+  const roles = sessions[callSid].map(m => m.role).join(',');
+  const alreadyGreeted = roles.includes('assistant');
+
+  if (!alreadyGreeted) {
+    try {
+      const chatResponse = await openai.chat.completions.create({
+        model: 'gpt-3.5-turbo',
+        messages: sessions[callSid]
+      });
+      let reply = chatResponse.choices[0].message.content;
+      reply = reply.replace(/([.,!?])\s*/g, '$1... ');
+      sessions[callSid].push({ role: 'assistant', content: reply });
+
+      const gather = twiml.gather({
+        input: 'speech',
+        action: '/voice',
+        method: 'POST',
+        timeout: 3,
+        speechTimeout: '1'
+      });
+      gather.say({ voice: 'Polly.Joanna', language: 'en-US' }, reply);
+      twiml.redirect('/voice');
+      res.type('text/xml');
+      return res.send(twiml.toString());
+    } catch (err) {
+      console.error('Error generating first assistant reply:', err);
+      twiml.say("Oh dear... a celestial hiccup occurred. Try again in a moment.");
+      res.type('text/xml');
+      return res.send(twiml.toString());
+    }
   }
 
   if (!userSpeech && sessions[callSid].length > 2) {
@@ -74,8 +94,15 @@ If the guest asks a direct, practical, or literal question (such as about a rest
     return res.send(twiml.toString());
   }
 
+  if (userSpeech) {
+    sessions[callSid].push({
+      role: 'user',
+      content: `The guest just said: "${userSpeech}". Please continue the magical conversation.`
+    });
+  }
+
   try {
-    const recentMessages = sessions[callSid].slice(-6); // Keep only the last 6 messages
+    const recentMessages = sessions[callSid].slice(-6);
     const chatResponse = await openai.chat.completions.create({
       model: 'gpt-3.5-turbo',
       messages: recentMessages
