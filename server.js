@@ -22,7 +22,6 @@ app.post('/voice', async (req, res) => {
   console.log('========================\n');
   console.log('SpeechResult:', userSpeech);
 
-  // If this is a new session
   if (!sessions[callSid]) {
     sessions[callSid] = [
       {
@@ -38,10 +37,9 @@ Each response should include:
 – A metaphorical or mysterious observation
 – A follow-up question to draw the guest deeper into the experience
 
-Do not give direct answers. Speak in symbols, riddles, or dreamy reflections. Keep each reply under 50 words. Avoid long monologues.
-Always end with a question.
+Speak in symbols, riddles, and dreamlike imagery — but ensure each reply forms a complete poetic idea. Avoid cryptic fragments or one-liners. Always end with a question.
 
-Avoid using lists or numbering in your responses.`
+Keep each reply under 50 words. Do not use numbered lists.`
       },
       {
         role: 'user',
@@ -52,7 +50,6 @@ Avoid using lists or numbering in your responses.`
     sessions[callSid].push({ role: 'user', content: `The guest just said: "${userSpeech}". Please continue the magical conversation.` });
   }
 
-  // If no user speech and it's not the first message
   if (!userSpeech && sessions[callSid].length > 2) {
     const gather = twiml.gather({
       input: 'speech',
@@ -68,22 +65,21 @@ Avoid using lists or numbering in your responses.`
   }
 
   try {
-    const recentMessages = sessions[callSid].slice(-6); // Keep only the last few messages
+    const recentMessages = sessions[callSid].slice(-6);
     const chatResponse = await openai.chat.completions.create({
-      model: 'gpt-3.5-turbo',
+      model: 'gpt-4',
       messages: recentMessages
     });
 
-    let reply = chatResponse.choices[0].message.content || '';
+    let reply = chatResponse.choices[0].message.content.trim();
 
-    reply = reply
-      .replace(/([.,!?])\s*/g, '$1... ')  // Add rhythmic pauses
-      .trim()
-      .slice(0, 500);                    // Truncate to 500 characters max
-
-    if (reply.length < 10) {
-      reply = "Hmm... I seem to have floated off for a moment. Could you ask that again?";
+    // Fallback if the response is too short
+    if (reply.split(/\s+/).length < 12) {
+      reply = "Ah, the winds whispered, but I must say more... What brings you here, traveler of tangled time?";
+      console.warn('⚠️ GPT reply was too short. Using fallback.');
     }
+
+    reply = reply.replace(/([.,!?])\s*/g, '$1... ');
 
     console.log(`\n=== RESPONSE ===`);
     console.log(`GUEST: ${userSpeech}`);
