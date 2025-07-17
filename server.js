@@ -1,4 +1,3 @@
-
 const express = require('express');
 const bodyParser = require('body-parser');
 const { OpenAI } = require('openai');
@@ -10,19 +9,21 @@ const port = process.env.PORT || 3000;
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 app.use(bodyParser.urlencoded({ extended: false }));
+
 const sessions = {};
 
 app.post('/voice', async (req, res) => {
   const callSid = req.body.CallSid;
-  const userSpeech = req.body.SpeechResult || '';
+  const userSpeechRaw = req.body.SpeechResult || '';
+  const userSpeech = userSpeechRaw.trim().toLowerCase();
   const twiml = new VoiceResponse();
 
   console.log('\n=== Incoming Request ===');
   console.log(req.body);
   console.log('========================\n');
-  console.log('SpeechResult:', userSpeech);
+  console.log('SpeechResult:', userSpeechRaw);
 
-  // Initialize session if first call
+  // Initialize session
   if (!sessions[callSid]) {
     sessions[callSid] = [
       {
@@ -47,15 +48,41 @@ Avoid using lists or numbering in your responses.`
         content: 'A new guest has picked up the receiver inside the enchanted phone booth. Please greet them in your signature style.'
       }
     ];
-  } else if (userSpeech) {
-    sessions[callSid].push({
-      role: 'user',
-      content: `The guest just said: "${userSpeech}". Please continue the magical conversation.`
-    });
+  } else if (userSpeech && userSpeech !== '') {
+    // Handle repeat request
+    if (
+      userSpeech.includes('repeat') ||
+      userSpeech.includes('can you say that again') ||
+      userSpeech.includes('can you repeat that')
+    ) {
+      const lastReply = sessions[callSid]
+        .slice()
+        .reverse()
+        .find(msg => msg.role === 'assistant')?.content;
+
+      if (lastReply) {
+        const gather = twiml.gather({
+          input: 'speech',
+          action: '/voice',
+          method: 'POST',
+          timeout: 3,
+          speechTimeout: '1'
+        });
+        gather.say({ voice: 'Polly.Joanna', language: 'en-US' }, lastReply);
+        twiml.redirect('/voice');
+        res.type('text/xml');
+        return res.send(twiml.toString());
+      }
+    } else {
+      sessions[callSid].push({
+        role: 'user',
+        content: `The guest just said: "${userSpeechRaw}". Please continue the magical conversation.`
+      });
+    }
   }
 
-  // Handle case where user says nothing
-  if (!userSpeech && sessions[callSid].length > 2) {
+  // Handle no speech with fallback
+  if (!userSpeechRaw && sessions[callSid].length > 2) {
     const gather = twiml.gather({
       input: 'speech',
       action: '/voice',
@@ -63,10 +90,7 @@ Avoid using lists or numbering in your responses.`
       timeout: 3,
       speechTimeout: '1'
     });
-    gather.say(
-      { voice: 'Polly.Joanna', language: 'en-US' },
-      "I didn’t quite hear you... Want to try again? Go ahead, I’m listening..."
-    );
+    gather.say({ voice: 'Polly.Joanna', language: 'en-US' }, "I didn’t quite hear you... Want to try again? Go ahead, I’m listening...");
     twiml.redirect('/voice');
     res.type('text/xml');
     return res.send(twiml.toString());
@@ -77,22 +101,20 @@ Avoid using lists or numbering in your responses.`
     const chatResponse = await openai.chat.completions.create({
       model: 'gpt-4',
       messages: recentMessages,
-      stream: false // Streaming setup placeholder; this will be replaced in Phase 2
+      stream: false
     });
 
-    let reply = chatResponse.choices?.[0]?.message?.content?.trim();
+    let reply = chatResponse.choices[0].message.content?.trim();
 
-    // Fallback reply if GPT fails or returns empty
-    if (!reply || reply.length < 5) {
-      reply =
-        "Ah, the stars flickered strangely just now... Perhaps try asking in a different way?";
+    // If GPT returns empty
+    if (!reply) {
+      reply = "Ah, the cosmos went quiet for a moment. Let us try again—what was it you asked?";
     }
 
-    // Stylize reply
     reply = reply.replace(/([.,!?])\s*/g, '$1... ');
 
     console.log(`\n=== RESPONSE ===`);
-    console.log(`GUEST: ${userSpeech}`);
+    console.log(`GUEST: ${userSpeechRaw}`);
     console.log(`GOD: ${reply}`);
     console.log(`================\n`);
 
@@ -110,9 +132,7 @@ Avoid using lists or numbering in your responses.`
     twiml.redirect('/voice');
   } catch (error) {
     console.error('Error during GPT reply:', error);
-    twiml.say(
-      "Oh dear... a celestial hiccup occurred. Try again in a moment."
-    );
+    twiml.say("Oh dear... a celestial hiccup occurred. Try again in a moment.");
   }
 
   res.type('text/xml');
