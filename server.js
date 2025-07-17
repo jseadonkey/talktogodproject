@@ -1,3 +1,4 @@
+
 const express = require('express');
 const bodyParser = require('body-parser');
 const { OpenAI } = require('openai');
@@ -21,7 +22,7 @@ app.post('/voice', async (req, res) => {
   console.log('========================\n');
   console.log('SpeechResult:', userSpeech);
 
-  // Start a new conversation if one doesn't exist
+  // Initialize session if first call
   if (!sessions[callSid]) {
     sessions[callSid] = [
       {
@@ -32,14 +33,14 @@ The guest has picked up a vintage telephone inside a mysterious phone booth loca
 
 Your tone is poetic, humorous, mystical, and slightly surreal. In your first reply only, mention "The Fainting Couch Hotel" by name.
 
-Do not give practical answers like recipes or directions. Instead, respond in metaphor, riddle, or dream logic.
-
 Each response should include:
 – A strange and magical greeting
 – A metaphorical or mysterious observation
 – A follow-up question to draw the guest deeper into the experience
 
-Keep each reply under 50 words. Avoid direct answers. Always end with a question.`
+Do not give direct answers. Speak in symbols, riddles, or dreamy reflections. Keep each reply under 50 words. Always end with a question.
+
+Avoid using lists or numbering in your responses.`
       },
       {
         role: 'user',
@@ -47,10 +48,13 @@ Keep each reply under 50 words. Avoid direct answers. Always end with a question
       }
     ];
   } else if (userSpeech) {
-    sessions[callSid].push({ role: 'user', content: `The guest just said: "${userSpeech}". Please continue the magical conversation.` });
+    sessions[callSid].push({
+      role: 'user',
+      content: `The guest just said: "${userSpeech}". Please continue the magical conversation.`
+    });
   }
 
-  // Handle silence from user
+  // Handle case where user says nothing
   if (!userSpeech && sessions[callSid].length > 2) {
     const gather = twiml.gather({
       input: 'speech',
@@ -59,26 +63,32 @@ Keep each reply under 50 words. Avoid direct answers. Always end with a question
       timeout: 3,
       speechTimeout: '1'
     });
-    gather.say({ voice: 'Polly.Joanna', language: 'en-US' }, "I didn’t quite hear you... Want to try again? Go ahead, I’m listening...");
+    gather.say(
+      { voice: 'Polly.Joanna', language: 'en-US' },
+      "I didn’t quite hear you... Want to try again? Go ahead, I’m listening..."
+    );
     twiml.redirect('/voice');
     res.type('text/xml');
     return res.send(twiml.toString());
   }
 
   try {
-    const recentMessages = sessions[callSid].slice(-6); // Maintain context
+    const recentMessages = sessions[callSid].slice(-6);
     const chatResponse = await openai.chat.completions.create({
       model: 'gpt-4',
-      messages: recentMessages
+      messages: recentMessages,
+      stream: false // Streaming setup placeholder; this will be replaced in Phase 2
     });
 
-    let reply = chatResponse.choices[0]?.message?.content?.trim() || '';
+    let reply = chatResponse.choices?.[0]?.message?.content?.trim();
 
-    // Fallback if GPT fails or gives poor reply
-    if (reply.length < 8) {
-      reply = "The winds carry secrets best left untold... But what truth do you seek in this moment?";
+    // Fallback reply if GPT fails or returns empty
+    if (!reply || reply.length < 5) {
+      reply =
+        "Ah, the stars flickered strangely just now... Perhaps try asking in a different way?";
     }
 
+    // Stylize reply
     reply = reply.replace(/([.,!?])\s*/g, '$1... ');
 
     console.log(`\n=== RESPONSE ===`);
@@ -100,7 +110,9 @@ Keep each reply under 50 words. Avoid direct answers. Always end with a question
     twiml.redirect('/voice');
   } catch (error) {
     console.error('Error during GPT reply:', error);
-    twiml.say("Oh dear... a celestial hiccup occurred. Try again in a moment.");
+    twiml.say(
+      "Oh dear... a celestial hiccup occurred. Try again in a moment."
+    );
   }
 
   res.type('text/xml');
