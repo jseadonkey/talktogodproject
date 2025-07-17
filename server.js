@@ -12,112 +12,79 @@ const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 app.use(bodyParser.urlencoded({ extended: false }));
 
 const sessions = {};
+
 const characters = {
-  '1': {
-    name: 'God',
+  GOD: {
+    voice: 'Polly.Joanna',
     systemPrompt: `You are a whimsical, female character called God, speaking to a guest at The Fainting Couch Hotel.
-
 The guest has picked up a vintage telephone inside a mysterious phone booth located in the wooded park area of the hotel grounds.
-
 Your tone is poetic, humorous, mystical, and slightly surreal. In your first reply only, mention "The Fainting Couch Hotel" by name.
-
 Each response should include:
 – A strange and magical greeting
 – A metaphorical or mysterious observation
 – A follow-up question to draw the guest deeper into the experience
-
 Do not give direct answers. Speak in symbols, riddles, or dreamy reflections. Keep each reply under 50 words. Always end with a question.
-
 Avoid using lists or numbering in your responses.`
   },
-  '2': {
-    name: 'Gloria',
-    systemPrompt: `You are Gloria, a clever and silly female pocket hippopotamus. You're speaking with a guest who picked up a special phone inside a whimsical booth at The Fainting Couch Hotel.
-
-You are warm, funny, a little chaotic, and surprisingly insightful.
-
-Your responses should always:
-– Introduce yourself as a pocket hippopotamus the first time
-– Say something funny or curious
-– Ask a follow-up question
-
-Do not give long factual answers. Avoid serious or dry tones. Keep replies short and joyful. End with a playful question.`
+  GLORIA: {
+    voice: 'Polly.Kimberly',
+    systemPrompt: `You are Gloria, a pocket-sized hippopotamus with a sultry, clever, and playful personality.
+You live in a velvet pouch at The Fainting Couch Hotel and love philosophical banter, jokes, and riddles.
+Each reply should be short, flirtatious, or funny—like a bedtime story told by someone who knows secrets.
+Avoid giving direct answers; keep the tone enchanting and mischievous.`
   }
 };
 
-const menuPrompt = "Welcome to the enchanted phone booth at The Fainting Couch Hotel. Press 1 to speak with God, or press 2 to speak with Gloria, the pocket hippopotamus.";
-
 app.post('/voice', async (req, res) => {
   const callSid = req.body.CallSid;
-  const digits = req.body.Digits;
   const userSpeech = req.body.SpeechResult || '';
+  const digits = req.body.Digits;
   const twiml = new VoiceResponse();
 
-  console.log('=== Incoming Request ===');
-  console.log(req.body);
-  console.log('SpeechResult:', userSpeech);
-
   if (!sessions[callSid]) {
-    if (!digits) {
-      const gather = twiml.gather({
-        numDigits: 1,
-        action: '/voice',
-        method: 'POST'
-      });
-      gather.say(menuPrompt);
-      res.type('text/xml');
-      return res.send(twiml.toString());
-    }
-
-    const character = characters[digits];
-    if (!character) {
-      twiml.say("Invalid choice. Goodbye!");
-      res.type('text/xml');
-      return res.send(twiml.toString());
-    }
-
-    sessions[callSid] = {
-      character: character.name,
-      messages: [
-        { role: 'system', content: character.systemPrompt },
-        { role: 'user', content: `A guest has just picked up the phone. Begin the conversation.` }
-      ]
-    };
-  } else if (userSpeech) {
-    sessions[callSid].messages.push({
-      role: 'user',
-      content: `The guest said: "${userSpeech}". Please continue the conversation.`
-    });
-  }
-
-  if (!userSpeech && sessions[callSid].messages.length > 2) {
+    sessions[callSid] = { character: null, messages: [] };
     const gather = twiml.gather({
-      input: 'speech',
-      action: '/voice',
-      method: 'POST',
-      timeout: 3,
-      speechTimeout: '1'
+      numDigits: 1,
+      action: '/select-character',
+      method: 'POST'
     });
-    gather.say("I didn’t quite hear you... Want to try again? Go ahead, I’m listening...");
-    twiml.redirect('/voice');
+    gather.say('Welcome to the enchanted line of The Fainting Couch Hotel. Press 1 to speak with God, or 2 to speak with Gloria the pocket hippopotamus.');
     res.type('text/xml');
     return res.send(twiml.toString());
   }
 
+  const session = sessions[callSid];
+  const { character, messages } = session;
+
+  if (!userSpeech && messages.length > 0) {
+    const gather = twiml.gather({
+      input: 'speech',
+      action: '/voice',
+      method: 'POST',
+      timeout: 3,
+      speechTimeout: '1'
+    });
+    gather.say({ voice: characters[character].voice, language: 'en-US' }, "I didn’t quite hear you... Want to try again? Go ahead, I’m listening...");
+    res.type('text/xml');
+    return res.send(twiml.toString());
+  }
+
+  if (messages.length === 0) {
+    messages.push({ role: 'system', content: characters[character].systemPrompt });
+    messages.push({ role: 'user', content: 'The guest has just picked up the receiver. Please greet them in character.' });
+  } else if (userSpeech) {
+    messages.push({ role: 'user', content: `The guest just said: "${userSpeech}". Please respond.` });
+  }
+
   try {
-    const recent = sessions[callSid].messages.slice(-6);
     const response = await openai.chat.completions.create({
       model: 'gpt-4',
-      messages: recent
+      messages: messages.slice(-6)
     });
 
     let reply = response.choices[0].message.content;
-    reply = reply.replace(/([.,!?])\s*/g, '$1... ');
 
-    console.log(`GUEST: ${userSpeech}`);
-    console.log(`REPLY: ${reply}`);
-
-    sessions[callSid].messages.push({ role: 'assistant', content: reply });
+    messages.push({ role: 'assistant', content: reply });
 
     const gather = twiml.gather({
       input: 'speech',
@@ -126,13 +93,39 @@ app.post('/voice', async (req, res) => {
       timeout: 3,
       speechTimeout: '1'
     });
-    gather.say({ voice: 'Polly.Joanna', language: 'en-US' }, reply);
-    twiml.redirect('/voice');
-  } catch (err) {
-    console.error('GPT Error:', err);
-    twiml.say("Oh dear... a cosmic hiccup. Please try again later.");
+
+    gather.say({ voice: characters[character].voice, language: 'en-US' }, reply);
+  } catch (e) {
+    console.error('OpenAI error:', e.message);
+    twiml.say("Oops, something went wrong. Try again shortly.");
   }
 
+  twiml.redirect('/voice');
+  res.type('text/xml');
+  res.send(twiml.toString());
+});
+
+app.post('/select-character', (req, res) => {
+  const callSid = req.body.CallSid;
+  const digit = req.body.Digits;
+  const twiml = new VoiceResponse();
+
+  if (digit === '1') {
+    sessions[callSid] = { character: 'GOD', messages: [] };
+  } else if (digit === '2') {
+    sessions[callSid] = { character: 'GLORIA', messages: [] };
+  } else {
+    const gather = twiml.gather({
+      numDigits: 1,
+      action: '/select-character',
+      method: 'POST'
+    });
+    gather.say('Invalid choice. Press 1 for God, or 2 for Gloria.');
+    res.type('text/xml');
+    return res.send(twiml.toString());
+  }
+
+  twiml.redirect('/voice');
   res.type('text/xml');
   res.send(twiml.toString());
 });
