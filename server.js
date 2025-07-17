@@ -9,7 +9,6 @@ const port = process.env.PORT || 3000;
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 app.use(bodyParser.urlencoded({ extended: false }));
-
 const sessions = {};
 
 app.post('/voice', async (req, res) => {
@@ -22,6 +21,7 @@ app.post('/voice', async (req, res) => {
   console.log('========================\n');
   console.log('SpeechResult:', userSpeech);
 
+  // Start a new conversation if one doesn't exist
   if (!sessions[callSid]) {
     sessions[callSid] = [
       {
@@ -32,14 +32,14 @@ The guest has picked up a vintage telephone inside a mysterious phone booth loca
 
 Your tone is poetic, humorous, mystical, and slightly surreal. In your first reply only, mention "The Fainting Couch Hotel" by name.
 
+Do not give practical answers like recipes or directions. Instead, respond in metaphor, riddle, or dream logic.
+
 Each response should include:
 – A strange and magical greeting
 – A metaphorical or mysterious observation
 – A follow-up question to draw the guest deeper into the experience
 
-Speak in symbols, riddles, and dreamlike imagery — but ensure each reply forms a complete poetic idea. Avoid cryptic fragments or one-liners. Always end with a question.
-
-Keep each reply under 50 words. Do not use numbered lists.`
+Keep each reply under 50 words. Avoid direct answers. Always end with a question.`
       },
       {
         role: 'user',
@@ -50,6 +50,7 @@ Keep each reply under 50 words. Do not use numbered lists.`
     sessions[callSid].push({ role: 'user', content: `The guest just said: "${userSpeech}". Please continue the magical conversation.` });
   }
 
+  // Handle silence from user
   if (!userSpeech && sessions[callSid].length > 2) {
     const gather = twiml.gather({
       input: 'speech',
@@ -65,18 +66,17 @@ Keep each reply under 50 words. Do not use numbered lists.`
   }
 
   try {
-    const recentMessages = sessions[callSid].slice(-6);
+    const recentMessages = sessions[callSid].slice(-6); // Maintain context
     const chatResponse = await openai.chat.completions.create({
       model: 'gpt-4',
       messages: recentMessages
     });
 
-    let reply = chatResponse.choices[0].message.content.trim();
+    let reply = chatResponse.choices[0]?.message?.content?.trim() || '';
 
-    // Fallback if the response is too short
-    if (reply.split(/\s+/).length < 12) {
-      reply = "Ah, the winds whispered, but I must say more... What brings you here, traveler of tangled time?";
-      console.warn('⚠️ GPT reply was too short. Using fallback.');
+    // Fallback if GPT fails or gives poor reply
+    if (reply.length < 8) {
+      reply = "The winds carry secrets best left untold... But what truth do you seek in this moment?";
     }
 
     reply = reply.replace(/([.,!?])\s*/g, '$1... ');
