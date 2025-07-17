@@ -1,3 +1,4 @@
+
 const express = require('express');
 const bodyParser = require('body-parser');
 const { OpenAI } = require('openai');
@@ -11,24 +12,10 @@ const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 app.use(bodyParser.urlencoded({ extended: false }));
 
 const sessions = {};
-
-app.post('/voice', async (req, res) => {
-  const callSid = req.body.CallSid;
-  const userSpeechRaw = req.body.SpeechResult || '';
-  const userSpeech = userSpeechRaw.trim().toLowerCase();
-  const twiml = new VoiceResponse();
-
-  console.log('\n=== Incoming Request ===');
-  console.log(req.body);
-  console.log('========================\n');
-  console.log('SpeechResult:', userSpeechRaw);
-
-  // Initialize session
-  if (!sessions[callSid]) {
-    sessions[callSid] = [
-      {
-        role: 'system',
-        content: `You are a whimsical, female character called God, speaking to a guest at The Fainting Couch Hotel.
+const characters = {
+  '1': {
+    name: 'God',
+    systemPrompt: `You are a whimsical, female character called God, speaking to a guest at The Fainting Couch Hotel.
 
 The guest has picked up a vintage telephone inside a mysterious phone booth located in the wooded park area of the hotel grounds.
 
@@ -42,47 +29,68 @@ Each response should include:
 Do not give direct answers. Speak in symbols, riddles, or dreamy reflections. Keep each reply under 50 words. Always end with a question.
 
 Avoid using lists or numbering in your responses.`
-      },
-      {
-        role: 'user',
-        content: 'A new guest has picked up the receiver inside the enchanted phone booth. Please greet them in your signature style.'
-      }
-    ];
-  } else if (userSpeech && userSpeech !== '') {
-    // Handle repeat request
-    if (
-      userSpeech.includes('repeat') ||
-      userSpeech.includes('can you say that again') ||
-      userSpeech.includes('can you repeat that')
-    ) {
-      const lastReply = sessions[callSid]
-        .slice()
-        .reverse()
-        .find(msg => msg.role === 'assistant')?.content;
+  },
+  '2': {
+    name: 'Gloria',
+    systemPrompt: `You are Gloria, a clever and silly female pocket hippopotamus. You're speaking with a guest who picked up a special phone inside a whimsical booth at The Fainting Couch Hotel.
 
-      if (lastReply) {
-        const gather = twiml.gather({
-          input: 'speech',
-          action: '/voice',
-          method: 'POST',
-          timeout: 3,
-          speechTimeout: '1'
-        });
-        gather.say({ voice: 'Polly.Joanna', language: 'en-US' }, lastReply);
-        twiml.redirect('/voice');
-        res.type('text/xml');
-        return res.send(twiml.toString());
-      }
-    } else {
-      sessions[callSid].push({
-        role: 'user',
-        content: `The guest just said: "${userSpeechRaw}". Please continue the magical conversation.`
+You are warm, funny, a little chaotic, and surprisingly insightful.
+
+Your responses should always:
+– Introduce yourself as a pocket hippopotamus the first time
+– Say something funny or curious
+– Ask a follow-up question
+
+Do not give long factual answers. Avoid serious or dry tones. Keep replies short and joyful. End with a playful question.`
+  }
+};
+
+const menuPrompt = "Welcome to the enchanted phone booth at The Fainting Couch Hotel. Press 1 to speak with God, or press 2 to speak with Gloria, the pocket hippopotamus.";
+
+app.post('/voice', async (req, res) => {
+  const callSid = req.body.CallSid;
+  const digits = req.body.Digits;
+  const userSpeech = req.body.SpeechResult || '';
+  const twiml = new VoiceResponse();
+
+  console.log('=== Incoming Request ===');
+  console.log(req.body);
+  console.log('SpeechResult:', userSpeech);
+
+  if (!sessions[callSid]) {
+    if (!digits) {
+      const gather = twiml.gather({
+        numDigits: 1,
+        action: '/voice',
+        method: 'POST'
       });
+      gather.say(menuPrompt);
+      res.type('text/xml');
+      return res.send(twiml.toString());
     }
+
+    const character = characters[digits];
+    if (!character) {
+      twiml.say("Invalid choice. Goodbye!");
+      res.type('text/xml');
+      return res.send(twiml.toString());
+    }
+
+    sessions[callSid] = {
+      character: character.name,
+      messages: [
+        { role: 'system', content: character.systemPrompt },
+        { role: 'user', content: `A guest has just picked up the phone. Begin the conversation.` }
+      ]
+    };
+  } else if (userSpeech) {
+    sessions[callSid].messages.push({
+      role: 'user',
+      content: `The guest said: "${userSpeech}". Please continue the conversation.`
+    });
   }
 
-  // Handle no speech with fallback
-  if (!userSpeechRaw && sessions[callSid].length > 2) {
+  if (!userSpeech && sessions[callSid].messages.length > 2) {
     const gather = twiml.gather({
       input: 'speech',
       action: '/voice',
@@ -90,35 +98,26 @@ Avoid using lists or numbering in your responses.`
       timeout: 3,
       speechTimeout: '1'
     });
-    gather.say({ voice: 'Polly.Joanna', language: 'en-US' }, "I didn’t quite hear you... Want to try again? Go ahead, I’m listening...");
+    gather.say("I didn’t quite hear you... Want to try again? Go ahead, I’m listening...");
     twiml.redirect('/voice');
     res.type('text/xml');
     return res.send(twiml.toString());
   }
 
   try {
-    const recentMessages = sessions[callSid].slice(-6);
-    const chatResponse = await openai.chat.completions.create({
+    const recent = sessions[callSid].messages.slice(-6);
+    const response = await openai.chat.completions.create({
       model: 'gpt-4',
-      messages: recentMessages,
-      stream: false
+      messages: recent
     });
 
-    let reply = chatResponse.choices[0].message.content?.trim();
-
-    // If GPT returns empty
-    if (!reply) {
-      reply = "Ah, the cosmos went quiet for a moment. Let us try again—what was it you asked?";
-    }
-
+    let reply = response.choices[0].message.content;
     reply = reply.replace(/([.,!?])\s*/g, '$1... ');
 
-    console.log(`\n=== RESPONSE ===`);
-    console.log(`GUEST: ${userSpeechRaw}`);
-    console.log(`GOD: ${reply}`);
-    console.log(`================\n`);
+    console.log(`GUEST: ${userSpeech}`);
+    console.log(`REPLY: ${reply}`);
 
-    sessions[callSid].push({ role: 'assistant', content: reply });
+    sessions[callSid].messages.push({ role: 'assistant', content: reply });
 
     const gather = twiml.gather({
       input: 'speech',
@@ -127,12 +126,11 @@ Avoid using lists or numbering in your responses.`
       timeout: 3,
       speechTimeout: '1'
     });
-
     gather.say({ voice: 'Polly.Joanna', language: 'en-US' }, reply);
     twiml.redirect('/voice');
-  } catch (error) {
-    console.error('Error during GPT reply:', error);
-    twiml.say("Oh dear... a celestial hiccup occurred. Try again in a moment.");
+  } catch (err) {
+    console.error('GPT Error:', err);
+    twiml.say("Oh dear... a cosmic hiccup. Please try again later.");
   }
 
   res.type('text/xml');
@@ -142,7 +140,6 @@ Avoid using lists or numbering in your responses.`
 app.post('/call-end', (req, res) => {
   const callSid = req.body.CallSid;
   delete sessions[callSid];
-  console.log(`[${new Date().toISOString()}] Call ${callSid} ended.`);
   res.sendStatus(200);
 });
 
